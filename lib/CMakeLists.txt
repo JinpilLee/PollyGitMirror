@@ -33,6 +33,8 @@ add_library(PollyCore OBJECT
   Analysis/ScopGraphPrinter.cpp
   Analysis/ScopPass.cpp
   Analysis/PruneUnprofitable.cpp
+  Analysis/SPDIR.cpp
+  Analysis/SPDIRInfo.cpp
   CodeGen/BlockGenerators.cpp
   ${ISL_CODEGEN_FILES}
   CodeGen/LoopGenerators.cpp
@@ -66,6 +68,7 @@ add_library(PollyCore OBJECT
   Transform/MaximalStaticExpansion.cpp
   Transform/RewriteByReferenceParameters.cpp
   Transform/ScopInliner.cpp
+  Transform/SPGenScheduler.cpp
   ${POLLY_HEADER_FILES}
   )
 set_target_properties(PollyCore PROPERTIES FOLDER "Polly")

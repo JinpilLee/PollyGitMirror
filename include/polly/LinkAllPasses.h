@@ -62,6 +62,8 @@ llvm::Pass *createIslScheduleOptimizerPass();
 llvm::Pass *createFlattenSchedulePass();
 llvm::Pass *createDeLICMPass();
 llvm::Pass *createMaximalStaticExpansionPass();
+llvm::Pass *createSPDIRInfoPass();
+llvm::Pass *createSPGenSchedulerPass();
 
 extern char &CodePreparationID;
 } // namespace polly
@@ -125,6 +127,8 @@ void initializeMaximalStaticExpanderPass(llvm::PassRegistry &);
 void initializePollyCanonicalizePass(llvm::PassRegistry &);
 void initializeFlattenSchedulePass(llvm::PassRegistry &);
 void initializeDeLICMPass(llvm::PassRegistry &);
+void initializeSPDIRInfoPass(llvm::PassRegistry &);
+void initializeSPGenSchedulerPass(llvm::PassRegistry &);
 } // namespace llvm
 
 #endif

@@ -99,10 +99,11 @@ static cl::opt<CodeGenChoice> CodeGeneration(
                clEnumValN(CODEGEN_NONE, "none", "No code generation")),
     cl::Hidden, cl::init(CODEGEN_FULL), cl::ZeroOrMore, cl::cat(PollyCategory));
 
-enum TargetChoice { TARGET_CPU, TARGET_GPU, TARGET_HYBRID };
+enum TargetChoice { TARGET_CPU, TARGET_SPGEN, TARGET_GPU, TARGET_HYBRID };
 static cl::opt<TargetChoice>
     Target("polly-target", cl::desc("The hardware to target"),
-           cl::values(clEnumValN(TARGET_CPU, "cpu", "generate CPU code")
+           cl::values(clEnumValN(TARGET_CPU, "cpu", "generate CPU code"),
+                      clEnumValN(TARGET_SPGEN, "spgen", "generate SPGen code")
 #ifdef GPU_CODEGEN
                           ,
                       clEnumValN(TARGET_GPU, "gpu", "generate GPU code"),
@@ -281,6 +282,8 @@ void initializePollyPasses(PassRegistry &Registry) {
   initializeSimplifyPass(Registry);
   initializeDumpModulePass(Registry);
   initializePruneUnprofitablePass(Registry);
+  initializeSPDIRInfoPass(Registry);
+  initializeSPGenSchedulerPass(Registry);
 }
 
 /// Register Polly passes such that they form a polyhedral optimizer.
@@ -362,25 +365,25 @@ void registerPollyPasses(llvm::legacy::PassManagerBase &PM) {
                                                      GPURuntimeChoice));
   }
 #endif
-  if (Target == TARGET_CPU || Target == TARGET_HYBRID)
+  if (Target == TARGET_CPU || Target == TARGET_HYBRID) {
     switch (Optimizer) {
     case OPTIMIZER_NONE:
       break; /* Do nothing */
 
     case OPTIMIZER_ISL:
-      if (EnableFlow) {
-        // TODO polyhedral optimization for flow
-      }
-      else {
-        PM.add(polly::createIslScheduleOptimizerPass());
-      }
+      PM.add(polly::createIslScheduleOptimizerPass());
       break;
     }
+  }
+  else if (Target == TARGET_SPGEN) {
+    PM.add(polly::createSPDIRInfoPass());
+    PM.add(polly::createSPGenSchedulerPass());
+  }
 
   if (ExportJScop)
     PM.add(polly::createJSONExporterPass());
 
-  if (Target == TARGET_CPU || Target == TARGET_HYBRID)
+  if (Target == TARGET_CPU || Target == TARGET_HYBRID) {
     switch (CodeGeneration) {
     case CODEGEN_AST:
       PM.add(polly::createIslAstInfoWrapperPassPass());
@@ -391,6 +394,10 @@ void registerPollyPasses(llvm::legacy::PassManagerBase &PM) {
     case CODEGEN_NONE:
       break;
     }
+  }
+  else if (Target == TARGET_SPGEN) {
+    // TODO implement SPGen codegen
+  }
 #ifdef GPU_CODEGEN
   else {
     PM.add(
