@@ -316,6 +316,11 @@ private:
   /// @param The region tree to scan for scops.
   void findScops(Region &R);
 
+  /// Find loops specified by Flow directives
+  ///
+  /// @param The region tree to scan for scops.
+  void findFlowLoops(Region &R);
+
   /// Check if all basic block in the region are valid.
   ///
   /// @param Context The context of scop detection.
@@ -547,7 +552,8 @@ private:
 public:
   ScopDetection(Function &F, const DominatorTree &DT, ScalarEvolution &SE,
                 LoopInfo &LI, RegionInfo &RI, AliasAnalysis &AA,
-                OptimizationRemarkEmitter &ORE);
+                OptimizationRemarkEmitter &ORE,
+                bool EnableFlow = false);
 
   /// Get the RegionInfo stored in this pass.
   ///
@@ -655,8 +661,9 @@ struct ScopAnalysisPrinterPass : public PassInfoMixin<ScopAnalysisPrinterPass> {
 struct ScopDetectionWrapperPass : public FunctionPass {
   static char ID;
   std::unique_ptr<ScopDetection> Result;
+  bool EnableFlow;
 
-  ScopDetectionWrapperPass();
+  ScopDetectionWrapperPass(bool EnableFlow = false);
 
   /// @name FunctionPass interface
   //@{

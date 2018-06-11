@@ -241,6 +241,11 @@ static cl::opt<bool> EnablePruneUnprofitable(
     cl::desc("Bail out on unprofitable SCoPs before rescheduling"), cl::Hidden,
     cl::init(true), cl::cat(PollyCategory));
 
+static cl::opt<bool> EnableFlow(
+    "polly-enable-flow",
+    cl::desc("Enable Flow code translation"), cl::Hidden,
+    cl::init(false), cl::cat(PollyCategory));
+
 namespace polly {
 void initializePollyPasses(PassRegistry &Registry) {
   initializeCodeGenerationPass(Registry);
@@ -310,7 +315,7 @@ void registerPollyPasses(llvm::legacy::PassManagerBase &PM) {
   for (auto &Filename : DumpBeforeFile)
     PM.add(polly::createDumpModulePass(Filename, false));
 
-  PM.add(polly::createScopDetectionWrapperPassPass());
+  PM.add(polly::createScopDetectionWrapperPassPass(EnableFlow));
 
   if (PollyDetectOnly)
     return;
@@ -363,7 +368,12 @@ void registerPollyPasses(llvm::legacy::PassManagerBase &PM) {
       break; /* Do nothing */
 
     case OPTIMIZER_ISL:
-      PM.add(polly::createIslScheduleOptimizerPass());
+      if (EnableFlow) {
+        // TODO polyhedral optimization for flow
+      }
+      else {
+        PM.add(polly::createIslScheduleOptimizerPass());
+      }
       break;
     }
 

@@ -44,7 +44,7 @@ llvm::Pass *createJSONExporterPass();
 llvm::Pass *createJSONImporterPass();
 llvm::Pass *createPollyCanonicalizePass();
 llvm::Pass *createPolyhedralInfoPass();
-llvm::Pass *createScopDetectionWrapperPassPass();
+llvm::Pass *createScopDetectionWrapperPassPass(bool EnableFlow = false);
 llvm::Pass *createScopInfoRegionPassPass();
 llvm::Pass *createScopInfoWrapperPassPass();
 llvm::Pass *createRewriteByrefParamsPass();

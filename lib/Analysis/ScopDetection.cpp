@@ -348,7 +348,8 @@ static bool doesStringMatchAnyRegex(StringRef Str,
 
 ScopDetection::ScopDetection(Function &F, const DominatorTree &DT,
                              ScalarEvolution &SE, LoopInfo &LI, RegionInfo &RI,
-                             AliasAnalysis &AA, OptimizationRemarkEmitter &ORE)
+                             AliasAnalysis &AA, OptimizationRemarkEmitter &ORE,
+                             bool EnableFlow)
     : DT(DT), SE(SE), LI(LI), RI(RI), AA(AA), ORE(ORE) {
   if (!PollyProcessUnprofitable && LI.empty())
     return;
@@ -365,25 +366,30 @@ ScopDetection::ScopDetection(Function &F, const DominatorTree &DT,
   if (!isValidFunction(F))
     return;
 
-  findScops(*TopRegion);
+  if (EnableFlow) {
+    findFlowLoops(*TopRegion);
+  }
+  else {
+    findScops(*TopRegion);
 
-  NumScopRegions += ValidRegions.size();
+    NumScopRegions += ValidRegions.size();
 
-  // Prune non-profitable regions.
-  for (auto &DIt : DetectionContextMap) {
-    auto &DC = DIt.getSecond();
-    if (DC.Log.hasErrors())
-      continue;
-    if (!ValidRegions.count(&DC.CurRegion))
-      continue;
-    LoopStats Stats = countBeneficialLoops(&DC.CurRegion, SE, LI, 0);
-    updateLoopCountStatistic(Stats, false /* OnlyProfitable */);
-    if (isProfitableRegion(DC)) {
-      updateLoopCountStatistic(Stats, true /* OnlyProfitable */);
-      continue;
+    // Prune non-profitable regions.
+    for (auto &DIt : DetectionContextMap) {
+      auto &DC = DIt.getSecond();
+      if (DC.Log.hasErrors())
+        continue;
+      if (!ValidRegions.count(&DC.CurRegion))
+        continue;
+      LoopStats Stats = countBeneficialLoops(&DC.CurRegion, SE, LI, 0);
+      updateLoopCountStatistic(Stats, false /* OnlyProfitable */);
+      if (isProfitableRegion(DC)) {
+        updateLoopCountStatistic(Stats, true /* OnlyProfitable */);
+        continue;
+      }
+
+      ValidRegions.remove(&DC.CurRegion);
     }
-
-    ValidRegions.remove(&DC.CurRegion);
   }
 
   NumProfScopRegions += ValidRegions.size();
@@ -396,8 +402,10 @@ ScopDetection::ScopDetection(Function &F, const DominatorTree &DT,
   if (ReportLevel)
     printLocations(F);
 
-  assert(ValidRegions.size() <= DetectionContextMap.size() &&
-         "Cached more results than valid regions");
+  if (!EnableFlow) {
+    assert(ValidRegions.size() <= DetectionContextMap.size() &&
+           "Cached more results than valid regions");
+  }
 }
 
 template <class RR, typename... Args>
@@ -1512,6 +1520,52 @@ void ScopDetection::findScops(Region &R) {
   }
 }
 
+static void collectFlowLoops(const Loop *L,
+                             std::vector<const Loop *> &FlowLoops) {
+  MDNode *LoopMD = L->getLoopID();
+  if (LoopMD) {
+    for (unsigned i = 1, ie = LoopMD->getNumOperands(); i < ie; ++i) {
+      MDNode *MD = dyn_cast<MDNode>(LoopMD->getOperand(i));
+      if (!MD) continue;
+      
+      MDString *S = dyn_cast<MDString>(MD->getOperand(0));
+      if (!S) continue;
+      
+      if (S->getString().equals("llvm.loop.flow.offload")) {
+        FlowLoops.push_back(L);
+        return;
+      }
+    }
+  }
+
+  for (const Loop *SubLoop : *L) {
+    collectFlowLoops(SubLoop, FlowLoops);
+  }
+}
+
+static Region *findMinRegionForLoop(const Loop *L, Region &R) {
+  assert(R.contains(L) && "Region R does not contain loop L");
+
+  for (auto &SubRegion : R) {
+    if (SubRegion->contains(L)) {
+      return findMinRegionForLoop(L, *SubRegion);
+    }
+  }
+
+  return &R;
+}
+
+void ScopDetection::findFlowLoops(Region &R) {
+  std::vector<const Loop *> FlowLoops;
+  for (const Loop *L : LI) {
+    collectFlowLoops(L, FlowLoops);
+  }
+
+  for (const Loop *L : FlowLoops) {
+    ValidRegions.insert(findMinRegionForLoop(L, R));
+  }
+}
+
 bool ScopDetection::allBlocksValid(DetectionContext &Context) const {
   Region &CurRegion = Context.CurRegion;
 
@@ -1848,7 +1902,7 @@ bool ScopDetectionWrapperPass::runOnFunction(Function &F) {
   auto &SE = getAnalysis<ScalarEvolutionWrapperPass>().getSE();
   auto &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
   auto &ORE = getAnalysis<OptimizationRemarkEmitterWrapperPass>().getORE();
-  Result.reset(new ScopDetection(F, DT, SE, LI, RI, AA, ORE));
+  Result.reset(new ScopDetection(F, DT, SE, LI, RI, AA, ORE, EnableFlow));
   return false;
 }
 
@@ -1870,7 +1924,8 @@ void ScopDetectionWrapperPass::print(raw_ostream &OS, const Module *) const {
   OS << "\n";
 }
 
-ScopDetectionWrapperPass::ScopDetectionWrapperPass() : FunctionPass(ID) {
+ScopDetectionWrapperPass::ScopDetectionWrapperPass(bool EnableFlow)
+  : FunctionPass(ID), EnableFlow(EnableFlow) {
   // Disable runtime alias checks if we ignore aliasing all together.
   if (IgnoreAliasing)
     PollyUseRuntimeAliasChecks = false;
@@ -1909,8 +1964,8 @@ PreservedAnalyses ScopAnalysisPrinterPass::run(Function &F,
   return PreservedAnalyses::all();
 }
 
-Pass *polly::createScopDetectionWrapperPassPass() {
-  return new ScopDetectionWrapperPass();
+Pass *polly::createScopDetectionWrapperPassPass(bool EnableFlow) {
+  return new ScopDetectionWrapperPass(EnableFlow);
 }
 
 INITIALIZE_PASS_BEGIN(ScopDetectionWrapperPass, "polly-detect",
