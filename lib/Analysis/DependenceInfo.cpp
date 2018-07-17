@@ -25,6 +25,7 @@
 #include "polly/Options.h"
 #include "polly/ScopInfo.h"
 #include "polly/Support/GICHelper.h"
+#include "polly/Support/ISLTools.h"
 #include "llvm/Support/Debug.h"
 #include <isl/aff.h>
 #include <isl/ctx.h>
@@ -189,12 +190,10 @@ static void collectInfo(Scop &S, isl_union_map *&Read,
 }
 
 /// Fix all dimension of @p Zero to 0 and add it to @p user
-static isl_stat fixSetToZero(__isl_take isl_set *Zero, void *user) {
-  isl_union_set **User = (isl_union_set **)user;
-  for (unsigned i = 0; i < isl_set_dim(Zero, isl_dim_set); i++)
-    Zero = isl_set_fix_si(Zero, isl_dim_set, i, 0);
-  *User = isl_union_set_add_set(*User, Zero);
-  return isl_stat_ok;
+static void fixSetToZero(isl::set Zero, isl::union_set *User) {
+  for (unsigned i = 0; i < Zero.dim(isl::dim::set); i++)
+    Zero = Zero.fix_si(isl::dim::set, i, 0);
+  *User = User->add_set(Zero);
 }
 
 /// Compute the privatization dependences for a given dependency @p Map
@@ -256,9 +255,14 @@ void Dependences::addPrivatizationDependences() {
   //        want to eliminate here.
   isl_union_set *UDeltas = isl_union_map_deltas(isl_union_map_copy(TC_RED));
   isl_union_set *Universe = isl_union_set_universe(isl_union_set_copy(UDeltas));
-  isl_union_set *Zero = isl_union_set_empty(isl_union_set_get_space(Universe));
-  isl_union_set_foreach_set(Universe, fixSetToZero, &Zero);
-  isl_union_map *NonPositive = isl_union_set_lex_le_union_set(UDeltas, Zero);
+  isl::union_set Zero =
+      isl::manage(isl_union_set_empty(isl_union_set_get_space(Universe)));
+
+  for (isl::set Set : isl::manage_copy(Universe).get_set_list())
+    fixSetToZero(Set, &Zero);
+
+  isl_union_map *NonPositive =
+      isl_union_set_lex_le_union_set(UDeltas, Zero.release());
 
   TC_RED = isl_union_map_subtract(TC_RED, NonPositive);
 
@@ -736,7 +740,8 @@ bool Dependences::isValidSchedule(Scop &S,
   if (LegalityCheckDisabled)
     return true;
 
-  isl_union_map *Dependences = getDependences(TYPE_RAW | TYPE_WAW | TYPE_WAR);
+  isl_union_map *Dependences =
+      (getDependences(TYPE_RAW | TYPE_WAW | TYPE_WAR)).release();
   isl_space *Space = S.getParamSpace().release();
   isl_union_map *Schedule = isl_union_map_empty(Space);
 
@@ -874,28 +879,28 @@ void Dependences::releaseMemory() {
   ReductionDependences.clear();
 }
 
-__isl_give isl_union_map *Dependences::getDependences(int Kinds) const {
+isl::union_map Dependences::getDependences(int Kinds) const {
   assert(hasValidDependences() && "No valid dependences available");
-  isl_space *Space = isl_union_map_get_space(RAW);
-  isl_union_map *Deps = isl_union_map_empty(Space);
+  isl::space Space = isl::manage_copy(RAW).get_space();
+  isl::union_map Deps = Deps.empty(Space);
 
   if (Kinds & TYPE_RAW)
-    Deps = isl_union_map_union(Deps, isl_union_map_copy(RAW));
+    Deps = Deps.unite(isl::manage_copy(RAW));
 
   if (Kinds & TYPE_WAR)
-    Deps = isl_union_map_union(Deps, isl_union_map_copy(WAR));
+    Deps = Deps.unite(isl::manage_copy(WAR));
 
   if (Kinds & TYPE_WAW)
-    Deps = isl_union_map_union(Deps, isl_union_map_copy(WAW));
+    Deps = Deps.unite(isl::manage_copy(WAW));
 
   if (Kinds & TYPE_RED)
-    Deps = isl_union_map_union(Deps, isl_union_map_copy(RED));
+    Deps = Deps.unite(isl::manage_copy(RED));
 
   if (Kinds & TYPE_TC_RED)
-    Deps = isl_union_map_union(Deps, isl_union_map_copy(TC_RED));
+    Deps = Deps.unite(isl::manage_copy(TC_RED));
 
-  Deps = isl_union_map_coalesce(Deps);
-  Deps = isl_union_map_detect_equalities(Deps);
+  Deps = Deps.coalesce();
+  Deps = Deps.detect_equalities();
   return Deps;
 }
 
