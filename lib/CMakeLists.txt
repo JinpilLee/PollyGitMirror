@@ -43,6 +43,7 @@ add_library(PollyCore OBJECT
   CodeGen/RuntimeDebugBuilder.cpp
   CodeGen/CodegenCleanup.cpp
   CodeGen/PerfMonitor.cpp
+  CodeGen/SPDPrinter.cpp
   ${GPGPU_CODEGEN_FILES}
   Exchange/JSONExporter.cpp
   Support/GICHelper.cpp

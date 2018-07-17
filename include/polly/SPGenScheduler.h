@@ -15,6 +15,7 @@
 #define POLLY_SPGEN_SCHEDULER
 
 #include "polly/ScopPass.h"
+#include "isl/isl-noexceptions.h"
 
 namespace polly {
 class Scop;
