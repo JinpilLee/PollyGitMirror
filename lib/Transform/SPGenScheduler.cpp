@@ -66,8 +66,8 @@ bool SPGenScheduler::runOnScop(Scop &S) {
     llvm_unreachable("SCoP has no domain");
   }
 
-  isl::union_map Validity = isl::manage(D.getDependences(ValidityKinds));
-  isl::union_map Proximity = isl::manage(D.getDependences(ProximityKinds));
+  isl::union_map Validity = D.getDependences(ValidityKinds);
+  isl::union_map Proximity = D.getDependences(ProximityKinds);
 
   isl_ctx *Ctx = S.getIslCtx().get();
   isl_options_set_schedule_outer_coincidence(Ctx, 0);
@@ -89,6 +89,9 @@ bool SPGenScheduler::runOnScop(Scop &S) {
 
   std::cerr << "\nNEW -------------------------------------------------------\n";
   Schedule.dump();
+
+  S.setScheduleTree(Schedule);
+  S.markAsOptimized();
 
   return false;
 }

@@ -397,6 +397,7 @@ void registerPollyPasses(llvm::legacy::PassManagerBase &PM) {
   }
   else if (Target == TARGET_SPGEN) {
     // TODO implement SPGen codegen
+    PM.add(polly::createCodeGenerationPass());
   }
 #ifdef GPU_CODEGEN
   else {
