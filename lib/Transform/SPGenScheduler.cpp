@@ -16,9 +16,11 @@
 #include "polly/SPDIRInfo.h"
 #include "polly/SPGenScheduler.h"
 
-#define DEBUG_TYPE "polly-ast"
-
+// FIXME for debug purpose, not supposed to be here
+#include "polly/CodeGen/SPDPrinter.h"
 #include <iostream>
+
+#define DEBUG_TYPE "polly-ast"
 
 using namespace llvm;
 using namespace polly;
@@ -45,9 +47,11 @@ bool SPGenScheduler::runOnScop(Scop &S) {
     llvm_unreachable("SCoP has no valid dependence");
   }
 
+// FIXME for debug purpose, not supposed to be here
   SPDIR *IR = getAnalysis<SPDIRInfo>().getIR(&S);
   if (IR) {
     IR->dump();
+    SPDPrinter Output(IR, 1, 1);
   }
   else {
     llvm_unreachable("cannot find an SPDIR");
